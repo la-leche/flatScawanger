@@ -1,0 +1,10 @@
+/notes
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+.web-extension-id
+web-ext-artifacts/
+*.xpi
+*.zip
+.env

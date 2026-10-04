@@ -1,0 +1,25 @@
+{
+  "manifest_version": 2,
+  "name": "Flat to PDF",
+  "version": "1.0",
+  "description": "Extract .flat entries and save as PDF",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["jspdf.umd.min.js", "background.js"]
+  },
+  "browser_action": {
+    "default_title": "Export .flat to PDF",
+    "default_icon": "icon-48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
