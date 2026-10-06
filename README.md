@@ -1,20 +1,19 @@
-# Flat to PDF
+# flatScawanger
 
-Firefox extension that finds DOM entries (e.g. `div.flat`) on the current page and exports them to PDF.
+Chrome extension.
 
-## Install (temporary)
+1. Main window: pick an agent (Immoscout, Kleinanzeigen).
+2. Parser: starts that agent's subagents. Subagents are empty.
+3. Export CSV: writes the parser rows. Header only until a subagent returns data.
 
-1. Open `about:debugging#/runtime/this-firefox`
-2. Click **Load Temporary Add-on…**
-3. Select `manifest.json`
+## Load
 
-## Usage
+1. `chrome://extensions`
+2. Developer mode
+3. Load unpacked
+4. Select this folder
+5. Click the toolbar icon
 
-1. Open a page with matching elements
-2. Click the toolbar icon
-3. PDF is generated / save dialog opens
+## Add a subagent later
 
-## Dev
-
-- Content script: DOM scrape (`content.js`)
-- Background: PDF build / `tabs.saveAsPDF` (`background.js`)
+In `subagents/registry.js`, put a `{ id, run }` on that agent. `run()` returns row objects with `source`, `id`, `title`, `price`, `location`, `url`, `scraped_at`.

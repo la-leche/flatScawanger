@@ -1,11 +1,26 @@
-// background.js
-browser.browserAction.onClicked.addListener(async (tab) => {
-  try {
-    await browser.tabs.sendMessage(tab.id, { type: "SCAN_OBID" });
-  } catch (e) {
-    console.error("Content script not ready:", e);
-    // optional: inject if page loaded before extension reload
-    await browser.tabs.executeScript(tab.id, { file: "content.js" });
-    await browser.tabs.sendMessage(tab.id, { type: "SCAN_OBID" });
+let windowId = null;
+
+chrome.action.onClicked.addListener(async () => {
+  if (windowId != null) {
+    try {
+      await chrome.windows.get(windowId);
+      await chrome.windows.update(windowId, { focused: true });
+      return;
+    } catch {
+      windowId = null;
+    }
   }
+
+  const created = await chrome.windows.create({
+    url: chrome.runtime.getURL("main.html"),
+    type: "popup",
+    width: 440,
+    height: 680,
+    focused: true,
+  });
+  windowId = created.id ?? null;
+});
+
+chrome.windows.onRemoved.addListener((id) => {
+  if (id === windowId) windowId = null;
 });
