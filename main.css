@@ -14,7 +14,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.4 ui-sans-serif, system-ui, sans-serif;
+  font: 14px/1.45 ui-sans-serif, system-ui, sans-serif;
 }
 header {
   padding: 18px 18px 8px;
@@ -28,7 +28,11 @@ header {
   text-transform: uppercase;
 }
 h1 { margin: 4px 0 10px; font-size: 22px; }
-main { padding: 14px 18px 20px; }
+main { padding: 14px 18px 24px; }
+button, select, input {
+  font: inherit;
+  color: inherit;
+}
 button, .agent {
   width: 100%;
   text-align: left;
@@ -40,10 +44,20 @@ button, .agent {
   cursor: pointer;
 }
 button:hover, .agent:hover { border-color: #4d5a49; }
-.agent + .agent, button + button { margin-top: 8px; }
-.agent strong { display: block; font-size: 15px; }
+button:disabled { cursor: default; opacity: 0.55; }
+.agent + .agent { margin-top: 8px; }
+.agent strong, .agent span { display: block; }
 .agent span, .muted { color: var(--muted); font-size: 12px; }
-.row { display: flex; gap: 8px; margin-top: 12px; }
+label { display: block; font-weight: 650; margin: 12px 0 6px; }
+input, select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #0d0f12;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.row { display: flex; gap: 8px; align-items: end; margin-top: 12px; }
+.row label { flex: 0 0 140px; margin: 0; }
 .row button { flex: 1; text-align: center; }
 .primary {
   background: var(--accent);
@@ -59,6 +73,13 @@ button:hover, .agent:hover { border-color: #4d5a49; }
   border: 1px solid var(--line);
   font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap;
-  min-height: 120px;
+  min-height: 96px;
 }
-.ghost { text-align: center; background: transparent; }
+table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+th, td {
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+}
+a { color: var(--accent); }

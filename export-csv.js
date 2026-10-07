@@ -3,14 +3,17 @@ export const CSV_HEADERS = [
   "id",
   "title",
   "price",
+  "size",
+  "rooms",
   "location",
   "url",
+  "text",
   "scraped_at",
 ];
 
 function cell(value) {
   const text = value == null ? "" : String(value);
-  if (/[;"\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  if (/[;"\n\r]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
   return text;
 }
 
@@ -20,7 +23,7 @@ export function toCsv(rows) {
   for (const row of rows) {
     lines.push(CSV_HEADERS.map((key) => cell(row[key])).join(";"));
   }
-  return `\uFEFF${lines.join("\r\n")}\r\n`;
+  return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
 
 export function downloadCsv(filename, csv) {
@@ -30,5 +33,5 @@ export function downloadCsv(filename, csv) {
   a.href = url;
   a.download = filename;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }

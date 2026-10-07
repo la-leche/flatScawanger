@@ -1,62 +1,45 @@
-// Injected into the result tab. Reads only chunks the search page already rendered.
 (function () {
   function linesOf(text) {
-    return String(text || "")
-      .replace(/\u00a0/g, " ")
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    return String(text || "").replace(/\u00a0/g, " ").split(/\n+/).map((s) => s.trim()).filter(Boolean);
   }
-
   function matchPrice(text) {
-    const m = String(text).match(
-      /(\d{1,3}(?:\.\d{3})*(?:,\d+)?(?:\s*[-–]\s*\d{1,3}(?:\.\d{3})*(?:,\d+)?)?\s*€(?:\s*VB)?)/
-    );
+    const m = String(text).match(/(\d{1,3}(?:\.\d{3})*(?:,\d+)?(?:\s*[-–]\s*\d{1,3}(?:\.\d{3})*(?:,\d+)?)?\s*€(?:\s*VB)?)/);
     return m ? m[1].replace(/\s+/g, " ").trim() : "";
   }
-
   function matchSize(text) {
-    const m = String(text).match(
-      /(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*m²)/
-    );
+    const m = String(text).match(/(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*m²)/);
     return m ? m[1].replace(/\s+/g, " ").trim() : "";
   }
-
   function matchRooms(text) {
-    const m = String(text).match(
-      /(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*Zi\.?)/i
-    );
+    const m = String(text).match(/(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*Zi\.?)/i);
     return m ? m[1].replace(/\s+/g, " ").trim() : "";
   }
-
   function matchLocation(text) {
     const lines = linesOf(text);
-    const withZip = lines.find((l) => /\b\d{5}\b/.test(l));
+    const withZip = lines.find((line) => /\b\d{5}\b/.test(line));
     if (withZip) return withZip.replace(/\s+/g, " ");
-    const frankfurt = lines.find((l) => /Frankfurt/i.test(l));
+    const frankfurt = lines.find((line) => /Frankfurt/i.test(line));
     if (frankfurt) return frankfurt.replace(/\s+/g, " ");
     const skip = /€|m²|Zi\.?|^[A-H]\+{0,2}$|^Neu$|^von privat$|^Bauprojekt$|^Anzeige$/i;
-    const rest = lines.filter((l) => l.length > 8 && !skip.test(l));
+    const rest = lines.filter((line) => line.length > 8 && !skip.test(line));
     return rest.length ? rest[rest.length - 1].replace(/\s+/g, " ") : "";
   }
-
   function matchTitle(text, explicit) {
     const given = String(explicit || "").replace(/\s+/g, " ").trim();
     if (given.length > 8) return given;
     const skip = /€|m²|Zi\.?|^[A-H]\+{0,2}$|^Neu$|^von privat$|^Bauprojekt$/i;
-    const line = linesOf(text).find((l) => l.length > 12 && !skip.test(l));
+    const line = linesOf(text).find((item) => item.length > 12 && !skip.test(item));
     return line ? line.replace(/\s+/g, " ") : "";
   }
-
   function absUrl(href) {
     if (!href) return "";
     try {
-      return new URL(href, location.href).href;
-    } catch (e) {
-      return href;
+      const url = new URL(href, location.href);
+      return url.protocol === "https:" ? url.href : "";
+    } catch {
+      return "";
     }
   }
-
   function rowBase(source, id, title, text, url) {
     const clean = String(text || "").replace(/\u00a0/g, " ").trim();
     return {
@@ -72,13 +55,6 @@
       scraped_at: new Date().toISOString(),
     };
   }
-
-  globalThis.__flatScrape = function (which) {
-    if (which === "immoscout") return scrapeImmoscout();
-    if (which === "kleinanzeigen") return scrapeKleinanzeigen();
-    return { rows: [], found: 0, url: location.href, title: document.title, error: "unknown scraper" };
-  };
-
   function scrapeImmoscout() {
     const nodes = Array.from(document.querySelectorAll("div[data-obid]"));
     const byId = new Map();
@@ -97,19 +73,16 @@
       const chosen = expose || titled || links[0];
       const href = chosen ? absUrl(chosen.getAttribute("href")) : "";
       const heading = el.querySelector("h2, h3, h4");
-      rows.push(
-        rowBase(
-          "immoscout",
-          id,
-          heading ? heading.innerText : titled ? titled.innerText : "",
-          el.innerText,
-          href || "https://www.immobilienscout24.de/expose/" + id
-        )
-      );
+      rows.push(rowBase(
+        "immoscout",
+        id,
+        heading ? heading.innerText : titled ? titled.innerText : "",
+        el.innerText,
+        href || "https://www.immobilienscout24.de/expose/" + id
+      ));
     }
-    return { rows, found: nodes.length, unique: rows.length, url: location.href, title: document.title };
+    return { rows, found: nodes.length, url: location.href, title: document.title };
   }
-
   function scrapeKleinanzeigen() {
     const items = Array.from(document.querySelectorAll("#srchrslt-adtable > li"));
     const rows = [];
@@ -117,9 +90,13 @@
     for (const li of items) {
       const article = li.querySelector("article");
       const link = li.querySelector('a[href*="/s-anzeige/"]');
-      const id = (article && article.getAttribute("data-adid")) || li.getAttribute("data-adid") || "";
+      const id = (article && article.getAttribute("data-adid"))
+        || li.getAttribute("data-adid")
+        || "";
       if (!article && !link && !id) continue;
-      const rawHref = (article && article.getAttribute("data-href")) || (link && link.getAttribute("href")) || "";
+      const rawHref = (article && article.getAttribute("data-href"))
+        || (link && link.getAttribute("href"))
+        || "";
       const url = absUrl(rawHref);
       const key = id || url;
       if (!key || seen.has(key)) continue;
@@ -128,9 +105,10 @@
       const priceEl = li.querySelector(".aditem-main--middle--price-shipping--price, .aditem-main--middle .price");
       const locEl = li.querySelector(".aditem-main--top--left");
       const text = [li.innerText, priceEl && priceEl.innerText, locEl && locEl.innerText].filter(Boolean).join("\n");
+      const urlId = (url.match(/\/(\d{6,})/) || [])[1] || "";
       const parsed = rowBase(
         "kleinanzeigen",
-        id || (url.match(/\/(\d+)(?:[/?#]|$)/) || [])[1] || "",
+        id || urlId,
         titleEl ? titleEl.innerText : "",
         text,
         url
@@ -139,6 +117,11 @@
       if (priceEl && priceEl.innerText.trim()) parsed.price = priceEl.innerText.replace(/\s+/g, " ").trim();
       rows.push(parsed);
     }
-    return { rows, found: items.length, unique: rows.length, url: location.href, title: document.title };
+    return { rows, found: items.length, url: location.href, title: document.title };
   }
+  globalThis.__flatScrape = function (which) {
+    if (which === "immoscout") return scrapeImmoscout();
+    if (which === "kleinanzeigen") return scrapeKleinanzeigen();
+    return { rows: [], found: 0, url: location.href, title: document.title };
+  };
 })();

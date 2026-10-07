@@ -1,39 +1,48 @@
 import { registry } from "./subagents/registry.js";
 
-// Starter. Does not scrape. It only runs the selected agent's subagents.
-export async function startParser(agent) {
+const FIELDS = ["source", "id", "title", "price", "size", "rooms", "location", "url", "text", "scraped_at"];
+
+function normalize(item, agentId, startedAt) {
+  const row = {};
+  for (const key of FIELDS) row[key] = item && item[key] ? String(item[key]) : "";
+  if (!row.source) row.source = agentId;
+  if (!row.scraped_at) row.scraped_at = startedAt;
+  return row;
+}
+
+export async function startParser(agent, { url, pages }) {
   const startedAt = new Date().toISOString();
-  const log = [`parser start: ${agent.id}`];
+  const log = ["parser start: " + agent.id];
+  const subagents = registry[agent.id] || [];
   const rows = [];
-  const subagents = registry[agent.id] || agent.subagents || [];
+  let error = "";
 
   if (!subagents.length) {
     log.push("no subagents");
+    return { ok: false, agentId: agent.id, startedAt, rows, log, error: "Keine Subagents." };
   }
 
   for (const sub of subagents) {
     const name = sub.id || "unnamed";
-    log.push(`run subagent: ${name}`);
+    log.push("run subagent: " + name);
     if (typeof sub.run !== "function") {
-      log.push(`skip ${name}: no run()`);
+      log.push("skip " + name + ": no run()");
       continue;
     }
-    const part = await sub.run({ agentId: agent.id, startedAt });
-    const items = Array.isArray(part) ? part : [];
-    log.push(`${name}: ${items.length} rows`);
-    for (const item of items) {
-      rows.push({
-        source: item.source || agent.id,
-        id: item.id || "",
-        title: item.title || "",
-        price: item.price || "",
-        location: item.location || "",
-        url: item.url || "",
-        scraped_at: item.scraped_at || startedAt,
-      });
-    }
+    const part = await sub.run({ agent, url, pages, startedAt });
+    for (const line of (part && part.log) || []) log.push(line);
+    if (part && part.error) error = part.error;
+    for (const item of (part && part.rows) || []) rows.push(normalize(item, agent.id, startedAt));
+    log.push(name + ": " + ((part && part.rows && part.rows.length) || 0) + " rows");
   }
 
-  log.push(`done: ${rows.length} rows`);
-  return { agentId: agent.id, startedAt, rows, log };
+  log.push("done: " + rows.length + " rows");
+  return {
+    ok: rows.length > 0,
+    agentId: agent.id,
+    startedAt,
+    rows,
+    log,
+    error: rows.length ? "" : error,
+  };
 }

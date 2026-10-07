@@ -1,128 +1,141 @@
-const agentSelect = document.querySelector("#agent");
-const urlInput = document.querySelector("#url");
-const pagesInput = document.querySelector("#pages");
-const hint = document.querySelector("#hint");
-const startBtn = document.querySelector("#start");
-const csvBtn = document.querySelector("#csv");
-const logEl = document.querySelector("#log");
-const rowsEl = document.querySelector("#rows");
+import { agents, getAgent, MAX_PAGES } from "./agents.js";
+import { downloadCsv, toCsv } from "./export-csv.js";
 
-let agents = [];
-let rows = [];
+const app = document.querySelector("#app");
+const title = document.querySelector("#title");
+let lastRun = null;
 
-function selectedAgent() {
-  return agents.find((a) => a.id === agentSelect.value) || agents[0];
-}
-
-function renderAgents() {
-  agentSelect.innerHTML = "";
-  for (const agent of agents) {
-    const opt = document.createElement("option");
-    opt.value = agent.id;
-    opt.textContent = agent.name + " / " + agent.subagent;
-    agentSelect.appendChild(opt);
-  }
-  applyAgent();
-}
-
-function applyAgent() {
-  const agent = selectedAgent();
-  if (!agent) return;
-  urlInput.value = agent.defaultUrl;
-  hint.textContent = agent.hint + " Selektor: " + agent.waitSelector;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
 }
 
 function renderRows(list) {
-  rowsEl.replaceChildren();
+  const table = el("table");
+  const head = document.createElement("tr");
+  for (const name of ["Titel", "Preis", "Groesse", "Zimmer", "Lage", "Link"]) {
+    head.append(el("th", "", name));
+  }
+  table.append(document.createElement("thead")).append(head);
+  const body = document.createElement("tbody");
   for (const row of list) {
     const tr = document.createElement("tr");
-    const cells = [row.title || row.id, row.price, row.size, row.rooms, row.location];
-    for (const value of cells) {
-      const td = document.createElement("td");
-      td.textContent = value || "";
-      tr.appendChild(td);
+    for (const value of [row.title || row.id, row.price, row.size, row.rooms, row.location]) {
+      tr.append(el("td", "", value || ""));
     }
-    const td = document.createElement("td");
-    if (row.url) {
-      const a = document.createElement("a");
+    const td = el("td");
+    if (row.url && row.url.startsWith("https://")) {
+      const a = el("a", "", "oeffnen");
       a.href = row.url;
       a.target = "_blank";
       a.rel = "noreferrer";
-      a.textContent = "oeffnen";
-      td.appendChild(a);
+      td.append(a);
     }
-    tr.appendChild(td);
-    rowsEl.appendChild(tr);
+    tr.append(td);
+    body.append(tr);
   }
+  table.append(body);
+  return table;
 }
 
-function toCsv(list) {
-  const headers = ["source", "id", "title", "price", "size", "rooms", "location", "url", "text", "scraped_at"];
-  const esc = (value) => {
-    const s = String(value ?? "");
-    if (/[;"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  };
-  const lines = [headers.join(";")];
-  for (const row of list) lines.push(headers.map((h) => esc(row[h])).join(";"));
-  return "\uFEFF" + lines.join("\r\n");
+function renderAgents() {
+  title.textContent = "Agents";
+  app.replaceChildren();
+  const list = el("div");
+  for (const agent of agents) {
+    const btn = el("button", "agent");
+    btn.type = "button";
+    btn.append(el("strong", "", agent.name), el("span", "", agent.blurb));
+    btn.addEventListener("click", () => renderParser(agent.id));
+    list.append(btn);
+  }
+  app.append(list);
 }
 
-agentSelect.addEventListener("change", applyAgent);
+function renderParser(agentId) {
+  const agent = getAgent(agentId);
+  if (!agent) return renderAgents();
+  title.textContent = agent.name;
+  app.replaceChildren();
 
-startBtn.addEventListener("click", async () => {
-  const agent = selectedAgent();
-  if (!agent) return;
-  startBtn.disabled = true;
-  csvBtn.disabled = true;
-  logEl.textContent = agent.subagent + " sucht. Der Tab bleibt offen.";
-  try {
-    const result = await chrome.runtime.sendMessage({
-      type: "RUN_AGENT",
-      agentId: agent.id,
-      url: urlInput.value.trim(),
-      pages: Number(pagesInput.value) || 1,
-    });
-    rows = (result && result.rows) || [];
-    const lines = (result && result.log) || [];
-    logEl.textContent = lines.join("\n") + (result && result.error ? "\n" + result.error : "");
-    renderRows(rows);
-    csvBtn.disabled = rows.length === 0;
-  } catch (err) {
-    logEl.textContent = String(err && err.message ? err.message : err);
-  } finally {
-    startBtn.disabled = false;
+  const note = el("p", "muted", agent.hint);
+  const urlLabel = el("label", "", "Such-URL");
+  urlLabel.htmlFor = "url";
+  const urlInput = document.createElement("input");
+  urlInput.id = "url";
+  urlInput.type = "url";
+  urlInput.spellcheck = false;
+  urlInput.value = agent.defaultUrl;
+
+  const actions = el("div", "row");
+  const pagesLabel = el("label", "", "Seiten (1-" + MAX_PAGES + ")");
+  const pagesInput = document.createElement("input");
+  pagesInput.type = "number";
+  pagesInput.min = "1";
+  pagesInput.max = String(MAX_PAGES);
+  pagesInput.value = "1";
+  pagesLabel.append(pagesInput);
+
+  const start = el("button", "primary", "Start");
+  start.type = "button";
+  const exp = el("button", "", "CSV exportieren");
+  exp.type = "button";
+  exp.disabled = true;
+  const log = el("pre", "log", "idle");
+
+  if (lastRun && lastRun.agentId === agent.id && lastRun.rows) {
+    exp.disabled = lastRun.rows.length === 0;
+    log.textContent = "Letzter Lauf:\n" + (lastRun.log || []).join("\n");
   }
-});
 
-csvBtn.addEventListener("click", () => {
-  const agent = selectedAgent();
-  const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "flats-" + (agent ? agent.id : "export") + ".csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
+  start.addEventListener("click", async () => {
+    start.disabled = true;
+    exp.disabled = true;
+    log.textContent = agent.id + "-search sucht. Der Tab bleibt offen.";
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: "RUN_AGENT",
+        agentId: agent.id,
+        url: urlInput.value.trim(),
+        pages: Number(pagesInput.value) || 1,
+      });
+      if (chrome.runtime.lastError) throw new Error(chrome.runtime.lastError.message);
+      lastRun = result || { rows: [], log: [], error: "Keine Antwort." };
+      const lines = lastRun.log || [];
+      log.textContent = lines.join("\n") + (lastRun.error ? "\n" + lastRun.error : "");
+      exp.disabled = !(lastRun.rows && lastRun.rows.length);
+      const old = app.querySelector("table");
+      if (old) old.remove();
+      if (lastRun.rows && lastRun.rows.length) app.append(renderRows(lastRun.rows));
+    } catch (err) {
+      log.textContent = String(err && err.message ? err.message : err);
+    } finally {
+      start.disabled = false;
+    }
+  });
 
-chrome.runtime.sendMessage({ type: "GET_AGENTS" }, (res) => {
-  agents = (res && res.agents) || [];
-  renderAgents();
-});
+  exp.addEventListener("click", () => {
+    if (!lastRun || lastRun.agentId !== agent.id) return;
+    const stamp = String(lastRun.startedAt || new Date().toISOString()).replace(/[:.]/g, "-");
+    downloadCsv(agent.id + "-" + stamp + ".csv", toCsv(lastRun.rows || []));
+  });
+
+  const back = el("button", "", "Zurueck zu den Agents");
+  back.type = "button";
+  back.style.marginTop = "12px";
+  back.addEventListener("click", renderAgents);
+
+  actions.append(pagesLabel, start, exp);
+  app.append(note, urlLabel, urlInput, actions, log, back);
+  if (lastRun && lastRun.agentId === agent.id && lastRun.rows && lastRun.rows.length) {
+    app.append(renderRows(lastRun.rows));
+  }
+}
 
 chrome.storage.local.get("lastRun", (stored) => {
-  const last = stored && stored.lastRun;
-  if (!last || !last.rows) return;
-  rows = last.rows;
-  renderRows(rows);
-  csvBtn.disabled = rows.length === 0;
-  if (last.log) logEl.textContent = "Letzter Lauf:\n" + last.log.join("\n");
+  lastRun = stored && stored.lastRun;
+  if (lastRun && lastRun.agentId && getAgent(lastRun.agentId)) renderParser(lastRun.agentId);
+  else renderAgents();
 });

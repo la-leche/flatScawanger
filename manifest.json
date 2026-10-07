@@ -1,31 +1,29 @@
 {
   "manifest_version": 3,
   "name": "flatScawanger",
-  "version": "0.4.0",
-  "description": "Oeffnet ImmoScout24 und Kleinanzeigen, liest die Ergebnis-Bloecke und exportiert CSV.",
-  "action": {
-    "default_title": "flatScawanger"
-  },
+  "version": "2.1.0",
+  "description": "Opens ImmoScout24 and Kleinanzeigen, reads listing blocks, exports CSV.",
+  "action": { "default_title": "flatScawanger" },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
-  "permissions": [
-    "tabs",
-    "scripting",
-    "storage"
-  ],
+  "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [
     "https://www.immoscout24.de/*",
     "https://immoscout24.de/*",
+    "https://*.immoscout24.de/*",
     "https://www.immobilienscout24.de/*",
     "https://immobilienscout24.de/*",
+    "https://*.immobilienscout24.de/*",
     "https://www.kleinanzeigen.de/*",
-    "https://kleinanzeigen.de/*"
+    "https://kleinanzeigen.de/*",
+    "https://*.kleinanzeigen.de/*"
   ],
   "browser_specific_settings": {
     "gecko": {
       "id": "flatscawanger@la-leche",
-      "strict_min_version": "115.0"
+      "strict_min_version": "128.0"
     }
   }
 }
