@@ -16,29 +16,24 @@
   }
   function matchLocation(text) {
     const lines = linesOf(text);
-    const withZip = lines.find((line) => /\b\d{5}\b/.test(line));
+    const withZip = lines.find((l) => /\b\d{5}\b/.test(l));
     if (withZip) return withZip.replace(/\s+/g, " ");
-    const frankfurt = lines.find((line) => /Frankfurt/i.test(line));
+    const frankfurt = lines.find((l) => /Frankfurt/i.test(l));
     if (frankfurt) return frankfurt.replace(/\s+/g, " ");
     const skip = /€|m²|Zi\.?|^[A-H]\+{0,2}$|^Neu$|^von privat$|^Bauprojekt$|^Anzeige$/i;
-    const rest = lines.filter((line) => line.length > 8 && !skip.test(line));
+    const rest = lines.filter((l) => l.length > 8 && !skip.test(l));
     return rest.length ? rest[rest.length - 1].replace(/\s+/g, " ") : "";
   }
   function matchTitle(text, explicit) {
     const given = String(explicit || "").replace(/\s+/g, " ").trim();
     if (given.length > 8) return given;
     const skip = /€|m²|Zi\.?|^[A-H]\+{0,2}$|^Neu$|^von privat$|^Bauprojekt$/i;
-    const line = linesOf(text).find((item) => item.length > 12 && !skip.test(item));
+    const line = linesOf(text).find((l) => l.length > 12 && !skip.test(l));
     return line ? line.replace(/\s+/g, " ") : "";
   }
   function absUrl(href) {
     if (!href) return "";
-    try {
-      const url = new URL(href, location.href);
-      return url.protocol === "https:" ? url.href : "";
-    } catch {
-      return "";
-    }
+    try { return new URL(href, location.href).href; } catch (e) { return href; }
   }
   function rowBase(source, id, title, text, url) {
     const clean = String(text || "").replace(/\u00a0/g, " ").trim();
@@ -90,13 +85,9 @@
     for (const li of items) {
       const article = li.querySelector("article");
       const link = li.querySelector('a[href*="/s-anzeige/"]');
-      const id = (article && article.getAttribute("data-adid"))
-        || li.getAttribute("data-adid")
-        || "";
+      const id = (article && article.getAttribute("data-adid")) || li.getAttribute("data-adid") || "";
       if (!article && !link && !id) continue;
-      const rawHref = (article && article.getAttribute("data-href"))
-        || (link && link.getAttribute("href"))
-        || "";
+      const rawHref = (article && article.getAttribute("data-href")) || (link && link.getAttribute("href")) || "";
       const url = absUrl(rawHref);
       const key = id || url;
       if (!key || seen.has(key)) continue;
@@ -105,10 +96,9 @@
       const priceEl = li.querySelector(".aditem-main--middle--price-shipping--price, .aditem-main--middle .price");
       const locEl = li.querySelector(".aditem-main--top--left");
       const text = [li.innerText, priceEl && priceEl.innerText, locEl && locEl.innerText].filter(Boolean).join("\n");
-      const urlId = (url.match(/\/(\d{6,})/) || [])[1] || "";
       const parsed = rowBase(
         "kleinanzeigen",
-        id || urlId,
+        id || (url.match(/\/(\d+)(?:[/?#]|$)/) || [])[1] || "",
         titleEl ? titleEl.innerText : "",
         text,
         url
