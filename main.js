@@ -1,141 +1,162 @@
-import { agents, getAgent, MAX_PAGES } from "./agents.js";
-import { downloadCsv, toCsv } from "./export-csv.js";
+const box = document.querySelector("#subagents");
+const pagesInput = document.querySelector("#pages");
+const startBtn = document.querySelector("#start");
+const csvBtn = document.querySelector("#csv");
+const logEl = document.querySelector("#log");
+const rowsEl = document.querySelector("#rows");
+let agents = [];
+let rows = [];
+let runPort = null;
 
-const app = document.querySelector("#app");
-const title = document.querySelector("#title");
-let lastRun = null;
+function renderAgents(selectedIds) {
+  box.replaceChildren();
+  const wanted = selectedIds && selectedIds.length ? new Set(selectedIds) : null;
+  for (const agent of agents) {
+    const wrap = document.createElement("div");
+    wrap.className = "sub";
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
+    const check = document.createElement("label");
+    check.className = "check";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.id = agent.id;
+    cb.checked = wanted ? wanted.has(agent.id) : true;
+    const name = document.createElement("span");
+    name.textContent = agent.subagent + " / " + agent.name;
+    check.append(cb, name);
+
+    const url = document.createElement("input");
+    url.type = "url";
+    url.spellcheck = false;
+    url.dataset.id = agent.id;
+    url.value = agent.defaultUrl;
+    url.setAttribute("aria-label", agent.subagent + " URL");
+
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.textContent = agent.hint;
+
+    wrap.append(check, url, hint);
+    box.append(wrap);
+  }
+}
+
+function selectedSubagents() {
+  const items = [];
+  for (const cb of box.querySelectorAll('input[type="checkbox"]')) {
+    if (!cb.checked) continue;
+    const url = box.querySelector('input[type="url"][data-id="' + cb.dataset.id + '"]');
+    items.push({ id: cb.dataset.id, url: url ? url.value.trim() : "" });
+  }
+  return items;
 }
 
 function renderRows(list) {
-  const table = el("table");
-  const head = document.createElement("tr");
-  for (const name of ["Titel", "Preis", "Groesse", "Zimmer", "Lage", "Link"]) {
-    head.append(el("th", "", name));
-  }
-  table.append(document.createElement("thead")).append(head);
-  const body = document.createElement("tbody");
+  rowsEl.replaceChildren();
   for (const row of list) {
     const tr = document.createElement("tr");
-    for (const value of [row.title || row.id, row.price, row.size, row.rooms, row.location]) {
-      tr.append(el("td", "", value || ""));
+    for (const value of [row.source, row.title || row.id, row.price, row.size, row.rooms, row.location]) {
+      const td = document.createElement("td");
+      td.textContent = value || "";
+      tr.appendChild(td);
     }
-    const td = el("td");
-    if (row.url && row.url.startsWith("https://")) {
-      const a = el("a", "", "oeffnen");
+    const td = document.createElement("td");
+    if (row.url && String(row.url).startsWith("https://")) {
+      const a = document.createElement("a");
       a.href = row.url;
       a.target = "_blank";
       a.rel = "noreferrer";
-      td.append(a);
+      a.textContent = "oeffnen";
+      td.appendChild(a);
     }
-    tr.append(td);
-    body.append(tr);
+    tr.appendChild(td);
+    rowsEl.appendChild(tr);
   }
-  table.append(body);
-  return table;
 }
 
-function renderAgents() {
-  title.textContent = "Agents";
-  app.replaceChildren();
-  const list = el("div");
-  for (const agent of agents) {
-    const btn = el("button", "agent");
-    btn.type = "button";
-    btn.append(el("strong", "", agent.name), el("span", "", agent.blurb));
-    btn.addEventListener("click", () => renderParser(agent.id));
-    list.append(btn);
-  }
-  app.append(list);
+function toCsv(list) {
+  const headers = ["source", "id", "title", "price", "size", "rooms", "location", "url", "text", "scraped_at"];
+  const esc = (value) => {
+    const s = String(value ?? "");
+    if (/[;"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  const lines = [headers.join(";")];
+  for (const row of list) lines.push(headers.map((h) => esc(row[h])).join(";"));
+  return "\uFEFF" + lines.join("\r\n");
 }
 
-function renderParser(agentId) {
-  const agent = getAgent(agentId);
-  if (!agent) return renderAgents();
-  title.textContent = agent.name;
-  app.replaceChildren();
-
-  const note = el("p", "muted", agent.hint);
-  const urlLabel = el("label", "", "Such-URL");
-  urlLabel.htmlFor = "url";
-  const urlInput = document.createElement("input");
-  urlInput.id = "url";
-  urlInput.type = "url";
-  urlInput.spellcheck = false;
-  urlInput.value = agent.defaultUrl;
-
-  const actions = el("div", "row");
-  const pagesLabel = el("label", "", "Seiten (1-" + MAX_PAGES + ")");
-  const pagesInput = document.createElement("input");
-  pagesInput.type = "number";
-  pagesInput.min = "1";
-  pagesInput.max = String(MAX_PAGES);
-  pagesInput.value = "1";
-  pagesLabel.append(pagesInput);
-
-  const start = el("button", "primary", "Start");
-  start.type = "button";
-  const exp = el("button", "", "CSV exportieren");
-  exp.type = "button";
-  exp.disabled = true;
-  const log = el("pre", "log", "idle");
-
-  if (lastRun && lastRun.agentId === agent.id && lastRun.rows) {
-    exp.disabled = lastRun.rows.length === 0;
-    log.textContent = "Letzter Lauf:\n" + (lastRun.log || []).join("\n");
+function show(msg) {
+  const lines = (msg && msg.log) || [];
+  logEl.textContent = lines.join("\n") + (msg && msg.error ? "\n" + msg.error : "");
+  if (msg && msg.rows) {
+    rows = msg.rows;
+    renderRows(rows);
   }
+}
 
-  start.addEventListener("click", async () => {
-    start.disabled = true;
-    exp.disabled = true;
-    log.textContent = agent.id + "-search sucht. Der Tab bleibt offen.";
-    try {
-      const result = await chrome.runtime.sendMessage({
-        type: "RUN_AGENT",
-        agentId: agent.id,
-        url: urlInput.value.trim(),
-        pages: Number(pagesInput.value) || 1,
-      });
-      if (chrome.runtime.lastError) throw new Error(chrome.runtime.lastError.message);
-      lastRun = result || { rows: [], log: [], error: "Keine Antwort." };
-      const lines = lastRun.log || [];
-      log.textContent = lines.join("\n") + (lastRun.error ? "\n" + lastRun.error : "");
-      exp.disabled = !(lastRun.rows && lastRun.rows.length);
-      const old = app.querySelector("table");
-      if (old) old.remove();
-      if (lastRun.rows && lastRun.rows.length) app.append(renderRows(lastRun.rows));
-    } catch (err) {
-      log.textContent = String(err && err.message ? err.message : err);
-    } finally {
-      start.disabled = false;
+startBtn.addEventListener("click", () => {
+  const subagents = selectedSubagents();
+  if (!subagents.length) {
+    logEl.textContent = "Keine Subagents gewaehlt.";
+    return;
+  }
+  if (runPort) {
+    try { runPort.disconnect(); } catch (e) {}
+    runPort = null;
+  }
+  startBtn.disabled = true;
+  csvBtn.disabled = true;
+  rows = [];
+  renderRows(rows);
+  logEl.textContent = subagents.map((item) => item.id).join(" -> ") + "\nWartet auf den ersten Subagent.";
+
+  let finished = false;
+  const port = chrome.runtime.connect({ name: "run" });
+  runPort = port;
+  port.onMessage.addListener((msg) => {
+    show(msg);
+    if (msg && msg.type === "done") {
+      finished = true;
+      csvBtn.disabled = rows.length === 0;
+      startBtn.disabled = false;
+      try { port.disconnect(); } catch (e) {}
+      if (runPort === port) runPort = null;
     }
   });
-
-  exp.addEventListener("click", () => {
-    if (!lastRun || lastRun.agentId !== agent.id) return;
-    const stamp = String(lastRun.startedAt || new Date().toISOString()).replace(/[:.]/g, "-");
-    downloadCsv(agent.id + "-" + stamp + ".csv", toCsv(lastRun.rows || []));
+  port.onDisconnect.addListener(() => {
+    if (!finished) {
+      logEl.textContent += "\nVerbindung weg. Lauf gestoppt vor dem naechsten Subagent.";
+      startBtn.disabled = false;
+      csvBtn.disabled = rows.length === 0;
+    }
+    if (runPort === port) runPort = null;
   });
+  port.postMessage({
+    type: "RUN_QUEUE",
+    subagents,
+    pages: Number(pagesInput.value) || 1,
+  });
+});
 
-  const back = el("button", "", "Zurueck zu den Agents");
-  back.type = "button";
-  back.style.marginTop = "12px";
-  back.addEventListener("click", renderAgents);
+csvBtn.addEventListener("click", () => {
+  const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "flats-queue.csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+});
 
-  actions.append(pagesLabel, start, exp);
-  app.append(note, urlLabel, urlInput, actions, log, back);
-  if (lastRun && lastRun.agentId === agent.id && lastRun.rows && lastRun.rows.length) {
-    app.append(renderRows(lastRun.rows));
-  }
-}
-
-chrome.storage.local.get("lastRun", (stored) => {
-  lastRun = stored && stored.lastRun;
-  if (lastRun && lastRun.agentId && getAgent(lastRun.agentId)) renderParser(lastRun.agentId);
-  else renderAgents();
+chrome.runtime.sendMessage({ type: "GET_AGENTS" }, (res) => {
+  agents = (res && res.agents) || [];
+  chrome.storage.local.get("lastRun", (stored) => {
+    const last = stored && stored.lastRun;
+    renderAgents(last && last.subagentIds);
+    if (!last || !last.rows) return;
+    rows = last.rows;
+    renderRows(rows);
+    csvBtn.disabled = rows.length === 0;
+    if (last.log) logEl.textContent = "Letzter Lauf:\n" + last.log.join("\n");
+  });
 });
