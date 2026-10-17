@@ -1,19 +1,12 @@
 # flatScawanger
 
-Chrome extension.
+Beide Subagents sind angekreuzt. Start laeuft die Liste von oben nach unten. Der naechste beginnt erst, wenn der vorherige fertig ist. Nicht parallel.
 
-1. Main window: pick an agent (Immoscout, Kleinanzeigen).
-2. Parser: starts that agent's subagents. Subagents are empty.
-3. Export CSV: writes the parser rows. Header only until a subagent returns data.
+| Subagent | URL | HTML |
+| --- | --- | --- |
+| immoscout-search | https://www.immoscout24.de/Suche/de/hessen/frankfurt-am-main/wohnung-mieten | div[data-obid] |
+| kleinanzeigen-search | https://www.kleinanzeigen.de/s-wohnung-mieten/frankfurt-am-main/c203l4292 | #srchrslt-adtable > li |
 
-## Load
+Seite 1 wird nur einmal geoeffnet. Kein zweites tabs.update, waehrend Kleinanzeigen auf /c203l4292 umleitet.
 
-1. `chrome://extensions`
-2. Developer mode
-3. Load unpacked
-4. Select this folder
-5. Click the toolbar icon
-
-## Add a subagent later
-
-In `subagents/registry.js`, put a `{ id, run }` on that agent. `run()` returns row objects with `source`, `id`, `title`, `price`, `location`, `url`, `scraped_at`.
+Chrome: Ordner als entpackte Erweiterung laden, auf chrome://extensions Reload druecken, dann Start. Cookie-Dialog im offenen Tab selbst bestaetigen.
